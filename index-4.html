@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DonsXD Check Ban — Vérification de numéro</title>
+<meta name="description" content="Vérifiez instantanément si un numéro WhatsApp est banni.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #000;
+    --green: #33ff99;
+    --green2: #00ff6a;
+    --green-dim: #1b8a5a;
+    --line: rgba(51,255,153,.18);
+    --amber: #ffb000;
+    --red: #ff3b5c;
+    --cyan: #4dfff2;
+    --ink: #d8fff0;
+    --ink-dim: #6b9787;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --disp: 'Share Tech Mono', var(--mono);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:#000; color:var(--ink); font-family:var(--mono); min-height:100vh; }
+  body{
+    position:relative; min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    padding: 40px 14px; overflow-x:hidden;
+  }
+
+  canvas#matrix-bg{
+    position:fixed; inset:0; width:100%; height:100%; z-index:0;
+  }
+  .vignette{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background: radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0) 30%, rgba(0,0,0,.55) 100%);
+  }
+  .scanlines{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,.15) 3px, rgba(0,0,0,0) 4px);
+    mix-blend-mode: multiply;
+  }
+
+  #boot-screen{
+    position:fixed; inset:0; z-index:50; background:#000; color:var(--green);
+    font-family:var(--mono); font-size:13px; line-height:1.7; padding:40px; white-space:pre-wrap;
+  }
+  #boot-screen .cursor{ display:inline-block; width:8px; height:14px; background:var(--green); animation:blink 1s steps(1) infinite; vertical-align:-2px; }
+  #boot-screen.hidden{ display:none; }
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  /* ---------- CARD ---------- */
+  #app{
+    position:relative; z-index:2; width:100%; max-width: 430px;
+    opacity:0; transform:translateY(10px); transition: opacity .5s ease, transform .5s ease;
+  }
+  #app.show{ opacity:1; transform:translateY(0); }
+
+  .card{
+    background: rgba(3,10,7,.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 34px 26px 30px;
+    box-shadow: 0 0 0 1px rgba(51,255,153,.05), 0 0 60px -10px rgba(51,255,153,.15), 0 40px 80px -30px rgba(0,0,0,.8);
+    text-align:center;
+  }
+
+  .logo{
+    width: 92px; height: 92px; margin: 0 auto 18px;
+    border-radius: 24px;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    border: 1.5px solid rgba(51,255,153,.55);
+    box-shadow: 0 0 0 8px rgba(51,255,153,.05), 0 0 40px rgba(51,255,153,.35), inset 0 0 25px rgba(51,255,153,.12);
+    background: radial-gradient(circle at 50% 30%, rgba(51,255,153,.12), rgba(0,0,0,0) 70%);
+  }
+  .logo svg{ width:42px; height:42px; }
+
+  .brand{
+    font-family: var(--disp);
+    font-size: 25px;
+    letter-spacing: 1.5px;
+    color: var(--green);
+    text-shadow: 0 0 14px rgba(51,255,153,.5);
+  }
+  .tagline{
+    margin-top:6px; font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    color: var(--ink-dim);
+  }
+
+  .status-pill{
+    display:inline-flex; align-items:center; gap:8px;
+    margin: 18px auto 4px;
+    padding: 7px 16px;
+    border-radius: 999px;
+    background: rgba(51,255,153,.08);
+    border: 1px solid var(--line);
+    font-size: 12px; color: var(--green);
+    letter-spacing: .5px;
+  }
+  .status-pill i{
+    width:7px; height:7px; border-radius:50%; background:var(--green);
+    box-shadow: 0 0 8px var(--green); animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse{ 50%{ opacity:.35; } }
+
+  .rule{ height:1px; margin: 22px 0 18px; background: linear-gradient(90deg, transparent, var(--line), transparent); }
+
+  form{ text-align:left; display:flex; flex-direction:column; gap:16px; }
+
+  label{
+    font-size: 10.5px; text-transform:uppercase; letter-spacing:2px; color: var(--ink-dim);
+    display:block; margin-bottom:8px;
+  }
+
+  select#country{
+    appearance:none; width:100%;
+    background: rgba(0,0,0,.35) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"><path d="M1 1l5 5 5-5" stroke="%2333ff99" stroke-width="1.5" fill="none"/></svg>') no-repeat right 16px center;
+    color: var(--ink); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 38px 14px 16px; font-family: var(--mono); font-size: 14px; cursor:pointer;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  select#country:focus{ outline:none; border-color: var(--green-dim); box-shadow: 0 0 0 3px rgba(51,255,153,.12); }
+  select#country option{ background:#04140f; color: var(--ink); }
+
+  .number-row{ display:flex; gap:10px; }
+  .prefix{
+    display:flex; align-items:center; justify-content:center; min-width: 76px;
+    background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 14px;
+    color: var(--cyan); font-size:14px; font-weight:600; letter-spacing:.5px;
+  }
+  input#phone{
+    flex:1; width:100%; background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px; color: var(--ink); font-family: var(--mono); font-size: 15px; letter-spacing:.5px;
+  }
+  input#phone:focus{ outline:none; border-color: var(--green-dim); box-shadow: 0 0 0 3px rgba(51,255,153,.12); }
+  input#phone::placeholder{ color: #345349; }
+
+  .hint{ font-size:11px; color:var(--ink-dim); min-height:14px; margin-top:6px; }
+  .hint.err{ color: var(--red); }
+
+  button#submit{
+    margin-top:4px; border:none; border-radius: 14px; padding: 16px;
+    font-family: var(--disp); letter-spacing: 2px; font-size: 14.5px; text-transform:uppercase;
+    color: #04140c; cursor:pointer;
+    background: linear-gradient(90deg, var(--green2), var(--cyan));
+    box-shadow: 0 8px 30px -8px rgba(51,255,153,.55);
+    transition: transform .15s ease, box-shadow .2s ease, filter .2s;
+  }
+  button#submit:hover{ filter:brightness(1.08); box-shadow: 0 8px 36px -6px rgba(51,255,153,.7); }
+  button#submit:active{ transform: scale(.98); }
+  button#submit:disabled{ opacity:.55; cursor:not-allowed; }
+
+  /* ---------- SCAN OUTPUT ---------- */
+  #scan-output{
+    margin-top: 18px; font-size: 12px; color: var(--green-dim); display:none;
+    white-space:pre-wrap; line-height:1.85; text-align:left;
+  }
+  #scan-output.show{ display:block; }
+  #scan-output .line{ opacity:0; animation: fadein .25s forwards; }
+  @keyframes fadein{ to{ opacity:1; } }
+  .bar{ display:inline-block; width: 150px; height:6px; background: rgba(51,255,153,.12); border-radius:3px; overflow:hidden; vertical-align:middle; margin-left:6px; }
+  .bar > i{ display:block; height:100%; width:0%; background: linear-gradient(90deg, var(--green-dim), var(--green)); animation: fill 1.6s ease forwards; }
+  @keyframes fill{ to{ width:100%; } }
+
+  /* ---------- RESULT ---------- */
+  #result{ display:none; margin-top: 20px; border-radius: 16px; overflow:hidden; border: 1px solid var(--line); text-align:left; }
+  #result.show{ display:block; animation: reveal .35s ease; }
+  @keyframes reveal{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:translateY(0);} }
+
+  .result-head{ padding: 16px 18px; display:flex; align-items:center; gap:12px; font-family: var(--disp); font-size: 18px; letter-spacing: 1.2px; }
+  .result-body{ padding: 14px 18px 18px; font-size: 12px; color: var(--ink-dim); border-top: 1px solid var(--line); background: rgba(0,0,0,.25); }
+  .result-body .row{ display:flex; justify-content:space-between; padding:4px 0; gap:10px; }
+  .result-body .row span:first-child{ color:#3f5f52; }
+  .result-body .row span:last-child{ color: var(--ink); text-align:right; word-break:break-word; }
+
+  #result.active .result-head{ background: rgba(51,255,153,.1); color: var(--green); }
+  #result.active{ border-color: var(--green-dim); box-shadow: 0 0 30px -8px rgba(51,255,153,.35); }
+  #result.banned .result-head{ background: rgba(255,59,92,.12); color: var(--red); animation: glitchtext .18s steps(2,end) 3; }
+  #result.banned{ border-color: var(--red); box-shadow: 0 0 30px -8px rgba(255,59,92,.4); }
+  @keyframes glitchtext{ 0%,100%{ transform: translate(0,0); } 25%{ transform: translate(-1px,1px); } 50%{ transform: translate(1px,-1px); } 75%{ transform: translate(-1px,0); } }
+  #result.error .result-head{ background: rgba(255,176,0,.12); color: var(--amber); }
+  #result.error{ border-color: var(--amber); }
+
+  #profile-card{
+    display:none; margin-top: 14px; border: 1px solid var(--line); border-radius: 16px; padding: 14px;
+    background: rgba(0,0,0,.3); gap: 14px; align-items:center; text-align:left;
+  }
+  #profile-card.show{ display:flex; }
+  #profile-card img{ width:54px; height:54px; border-radius:50%; object-fit:cover; border: 1px solid var(--green-dim); box-shadow: 0 0 14px rgba(51,255,153,.35); flex-shrink:0; }
+  #profile-card .ph-fallback{ width:54px; height:54px; border-radius:50%; border: 1px solid var(--green-dim); display:flex; align-items:center; justify-content:center; color: var(--green-dim); font-size:19px; flex-shrink:0; }
+  #profile-card .p-info{ font-size:12px; min-width:0; }
+  #profile-card .p-name{ color: var(--ink); font-size:14px; margin-bottom:3px; }
+  #profile-card .p-about{ color: var(--ink-dim); }
+
+  footer{ position:relative; z-index:2; margin-top: 18px; font-size: 11px; color: #4a6a5c; text-align:center; letter-spacing:.5px; }
+
+  @media (max-width: 420px){
+    .card{ padding:28px 18px 24px; border-radius:18px; }
+    .number-row{ flex-direction:column; }
+    .prefix{ align-self:flex-start; padding: 9px 16px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="matrix-bg"></canvas>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+
+<div id="boot-screen"><span id="boot-text"></span><span class="cursor"></span></div>
+
+<div id="app">
+  <div class="card">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#33ff99" stroke-width="1.6">
+        <path d="M12 2 L20 6 V12 C20 17 16.5 20.5 12 22 C7.5 20.5 4 17 4 12 V6 Z"/>
+        <path d="M8.5 12.5 L11 15 L16 9.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="brand">DonsXD Check-Ban</div>
+    <div class="tagline">Vérificateur de numéro WhatsApp</div>
+
+    <div class="status-pill"><i></i> service en ligne</div>
+
+    <div class="rule"></div>
+
+    <form id="check-form" autocomplete="off">
+      <div class="field">
+        <label for="country">Pays</label>
+        <select id="country"></select>
+      </div>
+
+      <div class="field">
+        <label for="phone">Numéro WhatsApp</label>
+        <div class="number-row">
+          <div class="prefix" id="prefix">+225</div>
+          <input id="phone" type="tel" inputmode="numeric" placeholder="07 00 00 00 00" required>
+        </div>
+        <div class="hint" id="hint">Format international, sans le zéro initial.</div>
+      </div>
+
+      <button id="submit" type="submit">Vérifier le numéro</button>
+    </form>
+
+    <div id="scan-output"></div>
+
+    <div id="result">
+      <div class="result-head"><span class="icon"></span><span class="label"></span></div>
+      <div class="result-body"></div>
+    </div>
+
+    <div id="profile-card">
+      <img id="p-photo" alt="Photo de profil" style="display:none">
+      <div class="ph-fallback" id="p-fallback" style="display:none">?</div>
+      <div class="p-info">
+        <div class="p-name" id="p-name">—</div>
+        <div class="p-about" id="p-about">—</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>donsxd@checkban — connecté à inconnu-check-ban-api</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ MATRIX RAIN — classic cmatrix look ============ */
+  const canvas = document.getElementById('matrix-bg');
+  const ctx = canvas.getContext('2d');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let cols, drops, speeds, fontSize = 16;
+
+  function resize(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.ceil(canvas.width / fontSize);
+    drops = new Array(cols).fill(0).map(()=> Math.floor(Math.random() * -40));
+    speeds = new Array(cols).fill(0).map(()=> 0.6 + Math.random()*1.1);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const glyphs = "01ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾙﾚﾛﾜﾝABCDEF+225";
+
+  function drawMatrix(){
+    ctx.fillStyle = 'rgba(0,0,0,0.055)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.font = fontSize + 'px "JetBrains Mono", monospace';
+    ctx.textBaseline = 'top';
+    for(let i=0;i<cols;i++){
+      const g = glyphs[Math.floor(Math.random()*glyphs.length)];
+      const x = i*fontSize;
+      const y = drops[i]*fontSize;
+
+      ctx.shadowColor = '#33ff99';
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = '#eafff5';
+      ctx.fillText(g, x, y);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = 'rgba(51,255,153,0.75)';
+      ctx.fillText(glyphs[Math.floor(Math.random()*glyphs.length)], x, y - fontSize);
+      ctx.fillStyle = 'rgba(51,255,153,0.35)';
+      ctx.fillText(glyphs[Math.floor(Math.random()*glyphs.length)], x, y - fontSize*2);
+
+      if(y > canvas.height && Math.random() > .96) drops[i] = Math.floor(Math.random()*-20);
+      drops[i] += speeds[i];
+    }
+  }
+  if(!reduceMotion){
+    setInterval(drawMatrix, 40);
+  } else {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  /* ============ BOOT SEQUENCE ============ */
+  const bootLines = [
+    "[BOOT] Initialisation du noyau DonsXD-Core v2.4.1 ...",
+    "[ OK ] Chargement des modules réseau",
+    "[ OK ] Établissement d'un canal vers inconnu-check-ban-api.onrender.com",
+    "[ OK ] Chiffrement de session : actif",
+    "[BOOT] Chargement de l'interface CHECK-BAN ...",
+    "> prêt."
+  ];
+  const bootTextEl = document.getElementById('boot-text');
+  const bootScreen = document.getElementById('boot-screen');
+  const app = document.getElementById('app');
+
+  function typeBoot(lines, cb){
+    let li = 0, ci = 0, out = "";
+    (function step(){
+      if(li >= lines.length){ cb(); return; }
+      const line = lines[li];
+      if(ci <= line.length){
+        out = lines.slice(0,li).join("\n") + (li>0?"\n":"") + line.slice(0,ci);
+        bootTextEl.textContent = out;
+        ci++;
+        setTimeout(step, 8 + Math.random()*10);
+      } else { li++; ci=0; setTimeout(step, 90); }
+    })();
+  }
+
+  if(reduceMotion){
+    bootScreen.classList.add('hidden');
+    app.classList.add('show');
+  } else {
+    typeBoot(bootLines, ()=>{
+      setTimeout(()=>{
+        bootScreen.classList.add('hidden');
+        app.classList.add('show');
+      }, 300);
+    });
+  }
+
+  /* ============ COUNTRIES ============ */
+  const COUNTRIES = [
+    ["🇨🇮","Côte d'Ivoire","225"], ["🇫🇷","France","33"], ["🇸🇳","Sénégal","221"],
+    ["🇲🇱","Mali","223"], ["🇧🇫","Burkina Faso","226"], ["🇬🇳","Guinée","224"],
+    ["🇹🇬","Togo","228"], ["🇧🇯","Bénin","229"], ["🇨🇲","Cameroun","237"],
+    ["🇳🇪","Niger","227"], ["🇳🇬","Nigeria","234"], ["🇬🇭","Ghana","233"],
+    ["🇨🇩","RD Congo","243"], ["🇨🇬","Congo","242"], ["🇬🇦","Gabon","241"],
+    ["🇲🇦","Maroc","212"], ["🇩🇿","Algérie","213"], ["🇹🇳","Tunisie","216"],
+    ["🇲🇷","Mauritanie","222"], ["🇹🇩","Tchad","235"], ["🇨🇫","RCA","236"],
+    ["🇬🇼","Guinée-Bissau","245"], ["🇧🇪","Belgique","32"], ["🇨🇭","Suisse","41"],
+    ["🇨🇦","Canada","1"], ["🇺🇸","États-Unis","1"], ["🇬🇧","Royaume-Uni","44"],
+    ["🇩🇪","Allemagne","49"], ["🇪🇸","Espagne","34"], ["🇮🇹","Italie","39"], ["🇵🇹","Portugal","351"]
+  ];
+
+  const countrySelect = document.getElementById('country');
+  const prefixEl = document.getElementById('prefix');
+
+  COUNTRIES.forEach((c, i)=>{
+    const opt = document.createElement('option');
+    opt.value = c[2];
+    opt.textContent = `${c[0]}  ${c[1]}  (+${c[2]})`;
+    if(i===0) opt.selected = true;
+    countrySelect.appendChild(opt);
+  });
+
+  function updatePrefix(){ prefixEl.textContent = '+' + countrySelect.value; }
+  countrySelect.addEventListener('change', updatePrefix);
+  updatePrefix();
+
+  /* ============ FORM / API ============ */
+  const form = document.getElementById('check-form');
+  const phoneInput = document.getElementById('phone');
+  const hint = document.getElementById('hint');
+  const submitBtn = document.getElementById('submit');
+  const scanOutput = document.getElementById('scan-output');
+  const resultBox = document.getElementById('result');
+  const resultIcon = resultBox.querySelector('.icon');
+  const resultLabel = resultBox.querySelector('.label');
+  const resultBody = resultBox.querySelector('.result-body');
+  const profileCard = document.getElementById('profile-card');
+  const pPhoto = document.getElementById('p-photo');
+  const pFallback = document.getElementById('p-fallback');
+  const pName = document.getElementById('p-name');
+  const pAbout = document.getElementById('p-about');
+
+  const API_BASE = "https://inconnu-check-ban-api.onrender.com";
+
+  function addScanLine(html, delay){
+    return new Promise(resolve=>{
+      setTimeout(()=>{
+        const div = document.createElement('div');
+        div.className = 'line';
+        div.innerHTML = html;
+        scanOutput.appendChild(div);
+        resolve();
+      }, delay);
+    });
+  }
+
+  async function runScanAnimation(fullNumber){
+    scanOutput.innerHTML = '';
+    scanOutput.classList.add('show');
+    await addScanLine(`&gt; cible : <span style="color:var(--cyan)">${fullNumber}</span>`, 0);
+    await addScanLine(`&gt; connexion au serveur distant ...`, 250);
+    await addScanLine(`&gt; interrogation du registre <span class="bar"><i></i></span>`, 500);
+    await addScanLine(`&gt; analyse de la réponse ...`, 1300);
+  }
+
+  function resetResult(){
+    resultBox.className = '';
+    resultBox.classList.remove('show');
+    profileCard.classList.remove('show');
+  }
+
+  function showError(msg){
+    resultBox.className = 'error show';
+    resultIcon.textContent = '⚠';
+    resultLabel.textContent = 'ERREUR DE CONNEXION';
+    resultBody.innerHTML = `<div class="row"><span>Détail</span><span>${msg}</span></div>`;
+  }
+
+  function showResult(banned, reason, number){
+    resultBox.className = (banned ? 'banned' : 'active') + ' show';
+    resultIcon.textContent = banned ? '⛔' : '✅';
+    resultLabel.textContent = banned ? 'NUMÉRO BANNI' : 'NUMÉRO TOUJOURS ACTIF';
+    resultBody.innerHTML = `
+      <div class="row"><span>Numéro</span><span>${number}</span></div>
+      <div class="row"><span>Statut</span><span>${banned ? 'Banni' : 'Actif'}</span></div>
+      ${reason ? `<div class="row"><span>Raison</span><span>${reason}</span></div>` : ''}
+      <div class="row"><span>Horodatage</span><span>${new Date().toLocaleString('fr-FR')}</span></div>
+    `;
+  }
+
+  function showProfile(data){
+    if(!data || (!data.name && !data.about && !data.photo)) return;
+    profileCard.classList.add('show');
+    pName.textContent = data.name || 'Nom non public';
+    pAbout.textContent = data.about || 'Aucune bio publique';
+    if(data.photo){
+      pPhoto.src = data.photo; pPhoto.style.display = 'block'; pFallback.style.display = 'none';
+    } else {
+      pPhoto.style.display = 'none'; pFallback.style.display = 'flex';
+      pFallback.textContent = (data.name || '?').charAt(0).toUpperCase();
+    }
+  }
+
+  async function callApi(path, number){
+    const res = await fetch(API_BASE + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number })
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+
+  form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    hint.classList.remove('err');
+    const digits = phoneInput.value.replace(/[^\d]/g, '').replace(/^0+/, '');
+    if(digits.length < 6){
+      hint.textContent = 'Numéro invalide — vérifie le format.';
+      hint.classList.add('err');
+      return;
+    }
+    const fullNumber = '+' + countrySelect.value + digits;
+
+    resetResult();
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Analyse en cours ...';
+
+    const animation = runScanAnimation(fullNumber);
+    const minWait = new Promise(r => setTimeout(r, 1700));
+
+    try {
+      const [checkData] = await Promise.all([callApi('/check', fullNumber), animation, minWait]);
+      showResult(!!checkData.banned, checkData.reason, fullNumber);
+      callApi('/profile', fullNumber).then(showProfile).catch(()=>{});
+    } catch(err){
+      await Promise.all([animation, minWait]);
+      showError("impossible de joindre le serveur distant. Réessaie dans un instant.");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Vérifier le numéro';
+      scanOutput.classList.remove('show');
+    }
+  });
+})();
+</script>
+</body>
+</html>
